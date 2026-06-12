@@ -17,7 +17,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--status",
         action="append",
-        choices=["candidate", "crowded", "stale", "unknown"],
+        choices=["candidate", "crowded", "stale", "unknown", "unsafe"],
         help="Only include matching status; repeatable",
     )
     parser.add_argument("--json-out", default=None, help="Optional JSON report path")

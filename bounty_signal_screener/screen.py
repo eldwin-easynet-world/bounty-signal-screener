@@ -7,7 +7,7 @@ from .models import BountyLink, GitHubState, ScreenedBounty
 
 
 def classify(bounty: BountyLink, github: GitHubState) -> ScreenedBounty:
-    if github.verification == "failed" or github.issue_state == "UNKNOWN":
+    if github.verification in {"failed", "partial-gh"} or github.issue_state == "UNKNOWN":
         return ScreenedBounty(bounty, github, "unknown", 0, "live GitHub verification failed")
 
     if github.issue_state != "OPEN":

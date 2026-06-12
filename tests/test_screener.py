@@ -96,6 +96,12 @@ class ScreenerTest(unittest.TestCase):
         result = classify(bounty, github)
         self.assertEqual(result.status, "stale")
 
+    def test_partial_github_verification_is_unknown(self) -> None:
+        bounty = BountyLink(100, "Add docs testing support", "example/project", 12, "https://github.com/example/project/issues/12")
+        github = GitHubState("OPEN", comments_count=2, assignees_count=0, open_pr_count=0, linked_pr_count=0, verification="partial-gh", notes=["open PR query failed"])
+        result = classify(bounty, github)
+        self.assertEqual(result.status, "unknown")
+
     def test_open_pr_marks_crowded(self) -> None:
         bounty = BountyLink(100, "Add docs testing support", "example/project", 12, "https://github.com/example/project/issues/12")
         github = GitHubState("OPEN", comments_count=2, assignees_count=0, open_pr_count=1, linked_pr_count=0, verification="live-gh", notes=[])
@@ -158,6 +164,10 @@ class ScreenerTest(unittest.TestCase):
     def test_cli_parser_accepts_top(self) -> None:
         args = build_parser().parse_args(["--source", "fixtures/sample_bounties.html", "--top", "3"])
         self.assertEqual(args.top, 3)
+
+    def test_cli_parser_accepts_unsafe_status(self) -> None:
+        args = build_parser().parse_args(["--source", "fixtures/sample_bounties.html", "--status", "unsafe"])
+        self.assertEqual(args.status, ["unsafe"])
 
     def test_summary_line_reports_displayed_rows(self) -> None:
         self.assertEqual(summary_line(30, 12, 3, 1), "parsed=30 screened=12 displayed=3 candidates=1")

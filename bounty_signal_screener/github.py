@@ -68,9 +68,11 @@ def fetch_github_state(bounty: BountyLink) -> GitHubState:
         ]
     )
     notes: list[str] = []
+    pr_verification = "live-gh"
     if not pr_ok or not isinstance(pr_data, list):
         notes.append(f"open PR query failed: {pr_data}")
         pr_data = []
+        pr_verification = "partial-gh"
 
     linked_pr_count = count_linked_pr_mentions(issue_data.get("comments") or [])
     if linked_pr_count:
@@ -86,7 +88,7 @@ def fetch_github_state(bounty: BountyLink) -> GitHubState:
         assignees_count=len(issue_data.get("assignees") or []),
         open_pr_count=len(pr_data),
         linked_pr_count=linked_pr_count,
-        verification="live-gh",
+        verification=pr_verification,
         notes=notes,
         safety_flags=tuple(safety_flags),
     )
