@@ -13,6 +13,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--source", default="https://unitaryhack.dev/bounties/", help="Bounty page URL or local HTML file")
     parser.add_argument("--max-items", type=int, default=None, help="Optional cap for live GitHub checks")
     parser.add_argument("--workers", type=int, default=8, help="Concurrent GitHub checks")
+    parser.add_argument("--top", type=int, default=20, help="Rows to print in the terminal Markdown report")
     parser.add_argument(
         "--status",
         action="append",
@@ -22,6 +23,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--json-out", default=None, help="Optional JSON report path")
     parser.add_argument("--markdown-out", default=None, help="Optional Markdown report path")
     return parser
+
+
+def summary_line(parsed_count: int, screened_count: int, displayed_count: int, candidate_count: int) -> str:
+    return (
+        f"parsed={parsed_count} screened={screened_count} "
+        f"displayed={displayed_count} candidates={candidate_count}"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -38,10 +46,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.markdown_out:
         write_markdown_report(screened, Path(args.markdown_out))
 
-    print(markdown_report(screened[:20]))
+    displayed = screened[: max(args.top, 0)]
+    print(markdown_report(displayed))
     print(
-        f"parsed={len(bounties)} screened={len(screened)} "
-        f"candidates={sum(item.status == 'candidate' for item in screened)}"
+        summary_line(
+            len(bounties),
+            len(screened),
+            len(displayed),
+            sum(item.status == "candidate" for item in screened),
+        )
     )
     return 0
 

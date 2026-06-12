@@ -1,5 +1,6 @@
 import unittest
 
+from bounty_signal_screener.cli import build_parser, summary_line
 from bounty_signal_screener.github import count_linked_pr_mentions
 from bounty_signal_screener.models import BountyLink, GitHubState
 from bounty_signal_screener.parser import parse_bounty_links
@@ -128,6 +129,13 @@ class ScreenerTest(unittest.TestCase):
         report = markdown_report([classify(bounty, github)])
         self.assertIn("[#12](https://github.com/example/project/issues/12)", report)
         self.assertIn("candidate", report)
+
+    def test_cli_parser_accepts_top(self) -> None:
+        args = build_parser().parse_args(["--source", "fixtures/sample_bounties.html", "--top", "3"])
+        self.assertEqual(args.top, 3)
+
+    def test_summary_line_reports_displayed_rows(self) -> None:
+        self.assertEqual(summary_line(30, 12, 3, 1), "parsed=30 screened=12 displayed=3 candidates=1")
 
     def test_count_linked_pr_mentions(self) -> None:
         comments = [
