@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 from .github import fetch_github_state
 from .models import BountyLink, GitHubState, ScreenedBounty
 
@@ -11,7 +13,12 @@ def classify(bounty: BountyLink, github: GitHubState) -> ScreenedBounty:
     if github.issue_state != "OPEN":
         return ScreenedBounty(bounty, github, "stale", -10, "source page listed a closed issue")
 
-    crowd_penalty = github.open_pr_count * 4 + github.assignees_count * 2 + max(github.comments_count - 6, 0)
+    crowd_penalty = (
+        github.open_pr_count * 4
+        + github.linked_pr_count * 4
+        + github.assignees_count * 2
+        + max(github.comments_count - 6, 0)
+    )
     score = bounty.amount_usd - crowd_penalty
 
     if github.open_pr_count > 0:
@@ -23,6 +30,15 @@ def classify(bounty: BountyLink, github: GitHubState) -> ScreenedBounty:
             f"{github.open_pr_count} open PR(s) already mention the issue",
         )
 
+    if github.linked_pr_count > 0:
+        return ScreenedBounty(
+            bounty,
+            github,
+            "crowded",
+            score,
+            f"{github.linked_pr_count} PR link(s) found in issue comments",
+        )
+
     if github.assignees_count > 0:
         return ScreenedBounty(bounty, github, "crowded", score, "issue already has assignee(s)")
 
@@ -32,7 +48,15 @@ def classify(bounty: BountyLink, github: GitHubState) -> ScreenedBounty:
     return ScreenedBounty(bounty, github, "candidate", score, "open issue with no open PR found")
 
 
-def screen_bounties(bounties: list[BountyLink], max_items: int | None = None) -> list[ScreenedBounty]:
+def screen_bounties(
+    bounties: list[BountyLink],
+    max_items: int | None = None,
+    workers: int = 8,
+) -> list[ScreenedBounty]:
     items = bounties if max_items is None else bounties[:max_items]
-    screened = [classify(bounty, fetch_github_state(bounty)) for bounty in items]
+    if workers <= 1:
+        screened = [classify(bounty, fetch_github_state(bounty)) for bounty in items]
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            screened = list(executor.map(lambda bounty: classify(bounty, fetch_github_state(bounty)), items))
     return sorted(screened, key=lambda item: (item.status != "candidate", -item.score, item.bounty.repo, item.bounty.number))

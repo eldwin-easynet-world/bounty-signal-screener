@@ -22,6 +22,7 @@ class GitHubState:
     comments_count: int
     assignees_count: int
     open_pr_count: int
+    linked_pr_count: int
     verification: str
     notes: list[str]
 

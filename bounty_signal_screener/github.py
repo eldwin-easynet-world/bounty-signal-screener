@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 
 from .models import BountyLink, GitHubState
+
+
+LINKED_PULL_RE = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+|[\w.-]+/[\w.-]+#\d+")
 
 
 def _run_gh(args: list[str]) -> tuple[bool, object]:
@@ -38,6 +42,7 @@ def fetch_github_state(bounty: BountyLink) -> GitHubState:
             comments_count=0,
             assignees_count=0,
             open_pr_count=0,
+            linked_pr_count=0,
             verification="failed",
             notes=[str(issue_data)],
         )
@@ -61,11 +66,27 @@ def fetch_github_state(bounty: BountyLink) -> GitHubState:
         notes.append(f"open PR query failed: {pr_data}")
         pr_data = []
 
+    linked_pr_count = count_linked_pr_mentions(issue_data.get("comments") or [])
+    if linked_pr_count:
+        notes.append(f"{linked_pr_count} PR link(s) mentioned in issue comments")
+
     return GitHubState(
         issue_state=str(issue_data.get("state", "UNKNOWN")),
         comments_count=len(issue_data.get("comments") or []),
         assignees_count=len(issue_data.get("assignees") or []),
         open_pr_count=len(pr_data),
+        linked_pr_count=linked_pr_count,
         verification="live-gh",
         notes=notes,
     )
+
+
+def count_linked_pr_mentions(comments: list[object]) -> int:
+    links: set[str] = set()
+    for comment in comments:
+        if not isinstance(comment, dict):
+            continue
+        body = str(comment.get("body") or "")
+        for match in LINKED_PULL_RE.findall(body):
+            links.add(match.rstrip(".,)"))
+    return len(links)
