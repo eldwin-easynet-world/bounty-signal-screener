@@ -1,0 +1,49 @@
+# Bounty Signal Screener
+
+Small CLI for filtering marketplace bounty pages against live GitHub state.
+
+The first supported source is the unitaryHACK bounty page. The tool extracts
+GitHub issue links, then checks:
+
+- issue state,
+- open pull requests mentioning the issue,
+- assignee count,
+- comment count,
+- recent maintainer or contributor signals.
+
+This is meant to prevent stale marketplace pages from wasting implementation
+time. It does not claim a bounty is winnable; it only separates "worth a closer
+look" from "already solved, crowded, or stale".
+
+## Quickstart
+
+```sh
+python3 -m bounty_signal_screener.cli \
+  --source https://unitaryhack.dev/bounties/ \
+  --json-out artifacts/unitaryhack.json \
+  --markdown-out artifacts/unitaryhack.md
+```
+
+If the GitHub CLI is available and authenticated, the screener uses it for live
+issue and PR state. Without `gh`, it still parses source-page candidates but
+marks live verification as unavailable.
+
+## Scores
+
+`candidate` means the issue is open and no open PR was found by the configured
+GitHub search. It still needs manual review.
+
+`crowded` means the issue is open but already has an open PR, assignee, or high
+comment count.
+
+`stale` means the source page listed the issue, but GitHub currently shows it as
+closed.
+
+`unknown` means live verification failed.
+
+## Validation
+
+```sh
+python3 -m unittest discover -s tests
+python3 -m bounty_signal_screener.cli --source fixtures/sample_bounties.html
+```

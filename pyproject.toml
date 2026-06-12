@@ -1,0 +1,9 @@
+[project]
+name = "bounty-signal-screener"
+version = "0.1.0"
+description = "Filter bounty marketplace pages against live GitHub issue and PR state."
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
