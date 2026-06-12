@@ -27,6 +27,7 @@ class GitHubState:
     linked_pr_count: int
     verification: str
     notes: list[str]
+    safety_flags: tuple[str, ...] = ()
 
     def to_jsonable(self) -> dict[str, Any]:
         return asdict(self)

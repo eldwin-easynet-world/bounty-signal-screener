@@ -13,6 +13,15 @@ def classify(bounty: BountyLink, github: GitHubState) -> ScreenedBounty:
     if github.issue_state != "OPEN":
         return ScreenedBounty(bounty, github, "stale", -10, "source page listed a closed issue")
 
+    if github.safety_flags:
+        return ScreenedBounty(
+            bounty,
+            github,
+            "unsafe",
+            -20,
+            f"issue asks for sensitive agent/session disclosure: {', '.join(github.safety_flags)}",
+        )
+
     crowd_penalty = (
         bounty.source_crowd_count * 2
         + github.open_pr_count * 4
