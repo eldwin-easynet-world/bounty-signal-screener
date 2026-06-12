@@ -2,13 +2,14 @@
 
 Small CLI for filtering marketplace bounty pages against live GitHub state.
 
-The first supported source is the unitaryHACK bounty page. The tool extracts
-GitHub issue links, then checks:
+The first supported sources are the unitaryHACK bounty page and Opire single
+issue pages. The tool extracts GitHub issue links, then checks:
 
 - issue state,
 - open pull requests mentioning the issue,
 - assignee count,
 - comment count,
+- source-page solver or claim signals when available,
 - recent maintainer or contributor signals.
 
 This is meant to prevent stale marketplace pages from wasting implementation
@@ -34,7 +35,8 @@ marks live verification as unavailable.
 GitHub search. It still needs manual review.
 
 `crowded` means the issue is open but already has an open PR, assignee, or high
-comment count.
+comment count. For Opire pages, high solver or claim counts also mark an issue
+as crowded because GitHub state alone can miss marketplace competition.
 
 `stale` means the source page listed the issue, but GitHub currently shows it as
 closed.
@@ -46,4 +48,5 @@ closed.
 ```sh
 python3 -m unittest discover -s tests
 python3 -m bounty_signal_screener.cli --source fixtures/sample_bounties.html
+python3 -m bounty_signal_screener.cli --source https://app.opire.dev/issues/01J73BXYSGA83XKW25TPF2QMK0
 ```

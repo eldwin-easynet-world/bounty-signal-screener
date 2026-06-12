@@ -15,15 +15,16 @@ def markdown_report(items: list[ScreenedBounty]) -> str:
     lines = [
         "# Bounty Signal Report",
         "",
-        "| Status | Score | Amount | Repo | Issue | Title | Reason |",
-        "| --- | ---: | ---: | --- | --- | --- | --- |",
+        "| Status | Score | Amount | Repo | Issue | Title | Source signals | Reason |",
+        "| --- | ---: | ---: | --- | --- | --- | --- | --- |",
     ]
     for item in items:
         title = item.bounty.title.replace("|", "\\|")
         reason = item.reason.replace("|", "\\|")
+        source_signals = ", ".join(item.bounty.source_notes).replace("|", "\\|") if item.bounty.source_notes else "-"
         lines.append(
             f"| {item.status} | {item.score} | ${item.bounty.amount_usd} | "
-            f"{item.bounty.repo} | [#{item.bounty.number}]({item.bounty.url}) | {title} | {reason} |"
+            f"{item.bounty.repo} | [#{item.bounty.number}]({item.bounty.url}) | {title} | {source_signals} | {reason} |"
         )
     return "\n".join(lines) + "\n"
 

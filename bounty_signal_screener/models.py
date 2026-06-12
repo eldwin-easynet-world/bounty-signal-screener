@@ -11,6 +11,8 @@ class BountyLink:
     repo: str
     number: int
     url: str
+    source_notes: tuple[str, ...] = ()
+    source_crowd_count: int = 0
 
     def to_jsonable(self) -> dict[str, Any]:
         return asdict(self)

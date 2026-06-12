@@ -14,7 +14,8 @@ def classify(bounty: BountyLink, github: GitHubState) -> ScreenedBounty:
         return ScreenedBounty(bounty, github, "stale", -10, "source page listed a closed issue")
 
     crowd_penalty = (
-        github.open_pr_count * 4
+        bounty.source_crowd_count * 2
+        + github.open_pr_count * 4
         + github.linked_pr_count * 4
         + github.assignees_count * 2
         + max(github.comments_count - 6, 0)
@@ -37,6 +38,16 @@ def classify(bounty: BountyLink, github: GitHubState) -> ScreenedBounty:
             "crowded",
             score,
             f"{github.linked_pr_count} PR link(s) found in issue comments",
+        )
+
+    if bounty.source_crowd_count >= 5:
+        source_signal = ", ".join(bounty.source_notes) or f"{bounty.source_crowd_count} source crowd signal(s)"
+        return ScreenedBounty(
+            bounty,
+            github,
+            "crowded",
+            score,
+            f"source page reports {source_signal}",
         )
 
     if github.assignees_count > 0:

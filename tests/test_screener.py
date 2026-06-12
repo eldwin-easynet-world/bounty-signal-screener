@@ -22,6 +22,22 @@ SAMPLE_HTML = """
 </li>
 """
 
+OPIRE_HTML = """
+<main>
+  <h1># $390.00 bounty for Add Wayland support</h1>
+  <a href="https://github.com/autokey/autokey/issues/87">Issue</a>
+  <div>23 solvers</div>
+  <div>11 claimed</div>
+</main>
+"""
+
+OPIRE_NEXT_HTML = r"""
+<head>
+  <meta property="og:title" content="$390.00 bounty: Add Wayland support"/>
+</head>
+<script>self.__next_f.push([1,"initialSelectedIssue\":{\"issueURL\":\"https://github.com/autokey/autokey/issues/87\",\"title\":\"Add Wayland support\",\"usersTrying\":[\"01AAA\",\"01BBB\"],\"usersClaiming\":[\"01CCC\"]},\"filters\":{}"])</script>
+"""
+
 
 class ScreenerTest(unittest.TestCase):
     def test_parse_bounty_links_deduplicates_issues(self) -> None:
@@ -30,6 +46,25 @@ class ScreenerTest(unittest.TestCase):
         self.assertEqual(links[0].amount_usd, 100)
         self.assertEqual(links[0].repo, "example/project")
         self.assertEqual(links[0].number, 12)
+
+    def test_parse_opire_issue_page_with_source_crowd_signals(self) -> None:
+        links = parse_bounty_links(OPIRE_HTML)
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0].amount_usd, 390)
+        self.assertEqual(links[0].repo, "autokey/autokey")
+        self.assertEqual(links[0].number, 87)
+        self.assertEqual(links[0].title, "Add Wayland support")
+        self.assertEqual(links[0].source_crowd_count, 34)
+        self.assertIn("23 solvers", links[0].source_notes)
+
+    def test_parse_opire_next_embedded_data(self) -> None:
+        links = parse_bounty_links(OPIRE_NEXT_HTML)
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0].amount_usd, 390)
+        self.assertEqual(links[0].repo, "autokey/autokey")
+        self.assertEqual(links[0].source_crowd_count, 3)
+        self.assertIn("2 trying", links[0].source_notes)
+        self.assertIn("1 claiming", links[0].source_notes)
 
     def test_candidate_requires_open_issue_and_no_pr(self) -> None:
         bounty = BountyLink(100, "Add docs testing support", "example/project", 12, "https://github.com/example/project/issues/12")
@@ -55,6 +90,21 @@ class ScreenerTest(unittest.TestCase):
         github = GitHubState("OPEN", comments_count=2, assignees_count=0, open_pr_count=0, linked_pr_count=1, verification="live-gh", notes=[])
         result = classify(bounty, github)
         self.assertEqual(result.status, "crowded")
+
+    def test_source_crowd_signals_mark_crowded(self) -> None:
+        bounty = BountyLink(
+            390,
+            "Add Wayland support",
+            "autokey/autokey",
+            87,
+            "https://github.com/autokey/autokey/issues/87",
+            source_notes=("23 solvers", "11 claimed"),
+            source_crowd_count=34,
+        )
+        github = GitHubState("OPEN", comments_count=2, assignees_count=0, open_pr_count=0, linked_pr_count=0, verification="live-gh", notes=[])
+        result = classify(bounty, github)
+        self.assertEqual(result.status, "crowded")
+        self.assertIn("source page reports", result.reason)
 
     def test_markdown_report_contains_links(self) -> None:
         bounty = BountyLink(100, "Add docs testing support", "example/project", 12, "https://github.com/example/project/issues/12")
