@@ -2,8 +2,9 @@
 
 Small CLI for filtering marketplace bounty pages against live GitHub state.
 
-The first supported sources are the unitaryHACK bounty page and Opire single
-issue pages. The tool extracts GitHub issue links, then checks:
+The first supported sources are the unitaryHACK bounty page plus Opire single
+issue pages and embedded issue-card lists. The tool extracts GitHub issue links,
+then checks:
 
 - issue state,
 - open pull requests mentioning the issue,

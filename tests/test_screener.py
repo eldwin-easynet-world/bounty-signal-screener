@@ -38,6 +38,10 @@ OPIRE_NEXT_HTML = r"""
 <script>self.__next_f.push([1,"initialSelectedIssue\":{\"issueURL\":\"https://github.com/autokey/autokey/issues/87\",\"title\":\"Add Wayland support\",\"usersTrying\":[\"01AAA\",\"01BBB\"],\"usersClaiming\":[\"01CCC\"]},\"filters\":{}"])</script>
 """
 
+OPIRE_CARD_LIST_HTML = r"""
+<script>self.__next_f.push([1,"bountyIssues:[{\"id\":\"01CARD\",\"title\":\"Tiny Rust fix\",\"url\":\"https://github.com/example/card/issues/9\",\"platform\":\"GitHub\",\"featuredBy\":null,\"claimerUsers\":[{\"id\":\"01CLAIM\",\"username\":\"c\"}],\"tryingUsers\":[{\"id\":\"01TRY1\",\"username\":\"t\"},{\"id\":\"01TRY2\",\"username\":\"u\"}],\"programmingLanguages\":[\"Rust\"],\"createdAt\":1,\"pendingPrice\":{\"value\":4200,\"unit\":\"USD_CENT\"},\"organization\":{\"name\":\"example\"}}]"])</script>
+"""
+
 
 class ScreenerTest(unittest.TestCase):
     def test_parse_bounty_links_deduplicates_issues(self) -> None:
@@ -65,6 +69,18 @@ class ScreenerTest(unittest.TestCase):
         self.assertEqual(links[0].source_crowd_count, 3)
         self.assertIn("2 trying", links[0].source_notes)
         self.assertIn("1 claiming", links[0].source_notes)
+
+    def test_parse_opire_embedded_issue_card_list(self) -> None:
+        links = parse_bounty_links(OPIRE_CARD_LIST_HTML)
+        self.assertEqual(len(links), 1)
+        self.assertEqual(links[0].amount_usd, 42)
+        self.assertEqual(links[0].repo, "example/card")
+        self.assertEqual(links[0].number, 9)
+        self.assertEqual(links[0].title, "Tiny Rust fix")
+        self.assertEqual(links[0].source_crowd_count, 3)
+        self.assertIn("2 trying", links[0].source_notes)
+        self.assertIn("1 claiming", links[0].source_notes)
+        self.assertIn("languages: Rust", links[0].source_notes)
 
     def test_candidate_requires_open_issue_and_no_pr(self) -> None:
         bounty = BountyLink(100, "Add docs testing support", "example/project", 12, "https://github.com/example/project/issues/12")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import json
 import re
 import subprocess
 import urllib.error
@@ -23,6 +24,15 @@ OPIRE_BOUNTY_LINE_RE = re.compile(
 OPIRE_META_TITLE_RE = re.compile(r'<meta[^>]+(?:property|name)="(?:og:title|twitter:title)"[^>]+content="([^"]+)"', re.IGNORECASE)
 OPIRE_META_BOUNTY_RE = re.compile(r"^\$+\s*(?P<amount>[0-9][0-9,]*(?:\.\d+)?)\s+bounty:\s+(?P<title>.+)$", re.IGNORECASE)
 SOURCE_CROWD_RE = re.compile(r"\b(?P<count>\d+)\s+(?P<label>solvers?|claims?|claimed)\b", re.IGNORECASE)
+NEXT_FLIGHT_PUSH_RE = re.compile(r"self\.__next_f\.push\(\[1,\"(.*?)\"\]\)</script>", re.DOTALL)
+OPIRE_CARD_RE = re.compile(
+    r'{\"id\":\"(?P<id>01[A-Z0-9]+)\",\"title\":\"(?P<title>.*?)\",'
+    r'\"url\":\"(?P<url>https://github\.com/[^\"]+/issues/\d+)\",\"platform\":\"GitHub\".*?'
+    r'\"claimerUsers\":\[(?P<claimers>.*?)\],\"tryingUsers\":\[(?P<tryers>.*?)\],'
+    r'\"programmingLanguages\":\[(?P<languages>.*?)\],\"createdAt\":\d+,'
+    r'\"pendingPrice\":{\"value\":(?P<price>\d+),\"unit\":\"USD_CENT\"}',
+    re.DOTALL,
+)
 
 
 def read_source(source: str) -> str:
@@ -40,6 +50,16 @@ def visible_lines(source_html: str) -> list[str]:
     text = re.sub(r"<[^>]+>", "\n", text)
     text = html.unescape(text)
     return [" ".join(line.split()) for line in text.splitlines() if line.split()]
+
+
+def decode_next_flight_text(source_html: str) -> str:
+    chunks: list[str] = []
+    for raw_chunk in NEXT_FLIGHT_PUSH_RE.findall(source_html):
+        try:
+            chunks.append(json.loads(f'"{raw_chunk}"'))
+        except json.JSONDecodeError:
+            continue
+    return "".join(chunks)
 
 
 def parse_opire_amount_title(source_html: str, lines: list[str]) -> tuple[int, str]:
@@ -79,6 +99,53 @@ def count_opire_user_array(section: str, field_name: str) -> int:
     if not match:
         return 0
     return len(re.findall(r'\\"01[A-Z0-9]+\\"', match.group(1)))
+
+
+def count_opire_user_objects(section: str) -> int:
+    return section.count('"id":"01')
+
+
+def parse_opire_issue_cards(source_html: str) -> list[BountyLink]:
+    flight_text = decode_next_flight_text(source_html)
+    if not flight_text:
+        return []
+
+    links: list[BountyLink] = []
+    seen: set[tuple[str, int]] = set()
+    for card_match in OPIRE_CARD_RE.finditer(flight_text):
+        issue_match = GITHUB_ISSUE_RE.search(card_match.group("url"))
+        if not issue_match:
+            continue
+        repo = issue_match.group(1)
+        number = int(issue_match.group(2))
+        key = (repo, number)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        trying_count = count_opire_user_objects(card_match.group("tryers"))
+        claiming_count = count_opire_user_objects(card_match.group("claimers"))
+        source_notes = []
+        if trying_count:
+            source_notes.append(f"{trying_count} trying")
+        if claiming_count:
+            source_notes.append(f"{claiming_count} claiming")
+        languages = tuple(re.findall(r'"([^"]+)"', card_match.group("languages")))
+        if languages:
+            source_notes.append(f"languages: {', '.join(languages)}")
+
+        links.append(
+            BountyLink(
+                amount_usd=round(int(card_match.group("price")) / 100),
+                title=html.unescape(card_match.group("title")),
+                repo=repo,
+                number=number,
+                url=card_match.group("url"),
+                source_notes=tuple(source_notes),
+                source_crowd_count=trying_count + claiming_count,
+            )
+        )
+    return links
 
 
 def parse_opire_issue_page(source_html: str) -> list[BountyLink]:
@@ -143,6 +210,9 @@ def parse_bounty_links(source_html: str) -> list[BountyLink]:
                 url=url,
             )
         )
+    if links:
+        return links
+    links = parse_opire_issue_cards(source_html)
     if links:
         return links
     return parse_opire_issue_page(source_html)
