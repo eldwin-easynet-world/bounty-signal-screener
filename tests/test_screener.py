@@ -217,6 +217,28 @@ class ScreenerTest(unittest.TestCase):
         self.assertTrue(is_self_claim_body("Claiming onboarding bounty #2781.\nWallet: abc"))
         self.assertFalse(is_self_claim_body("Build a utility that verifies PoC scripts and reports exit codes."))
 
+    def test_issue_from_gh_marks_existing_claim_comments(self) -> None:
+        issue = issue_from_gh(
+            {
+                "number": 13795,
+                "title": "[SDK: 2-5 RTC] Potential JSONDecodeError",
+                "url": "https://github.com/Scottcjn/rustchain-bounties/issues/13795",
+                "author": {"login": "Scottcjn"},
+                "updatedAt": "2026-06-11T07:17:02Z",
+                "body": "Fix empty 200 responses for 2-5 RTC.",
+                "comments": [
+                    {
+                        "author": {"login": "lazyGPT07"},
+                        "body": "Implementation claim for #13795\n\nPR: https://github.com/Scottcjn/Rustchain/pull/7332\nRTC wallet: RTCabc",
+                    },
+                ],
+            },
+            actor="eldwin-easynet-world",
+        )
+
+        self.assertTrue(issue.has_claim_comment)
+        self.assertEqual(issue.actor_comment_count, 0)
+
     def test_issue_from_gh_marks_body_self_claims(self) -> None:
         issue = issue_from_gh(
             {

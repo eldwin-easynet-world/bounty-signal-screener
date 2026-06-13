@@ -23,6 +23,18 @@ SELF_CLAIM_BODY_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+CLAIM_COMMENT_RE = re.compile(
+    r"("
+    r"/(?:claim|attempt)\b|"
+    r"\bclaim(?:ing)?\b|"
+    r"\bsubmitted\b|"
+    r"\bPR:\s*https?://|"
+    r"github\.com/[^/]+/[^/]+/pull/\d+|"
+    r"\bRTC wallet\b|"
+    r"\bwallet:\b"
+    r")",
+    re.IGNORECASE,
+)
 PAID_RE = re.compile(r"\bpaid\b", re.IGNORECASE)
 RECIPIENT_RE = re.compile(r"@([A-Za-z0-9-]+)")
 
@@ -41,6 +53,7 @@ class RustChainIssue:
     maintainer_paid: bool
     tx_ids: tuple[str, ...]
     body_self_claim: bool = False
+    has_claim_comment: bool = False
 
     def to_jsonable(self) -> dict[str, Any]:
         return asdict(self)
@@ -142,6 +155,10 @@ def is_self_claim_body(body: str) -> bool:
     return bool(SELF_CLAIM_BODY_RE.search(body))
 
 
+def is_claim_comment(body: str) -> bool:
+    return bool(CLAIM_COMMENT_RE.search(body))
+
+
 def extract_tx_ids(text: str) -> tuple[str, ...]:
     return tuple(sorted(set(re.findall(r"\btx\s*`?([0-9a-f]{6,12})`?", text, re.IGNORECASE))))
 
@@ -195,6 +212,7 @@ def issue_from_gh(data: dict[str, Any], actor: str) -> RustChainIssue:
         reward_low, reward_high = parse_rtc_reward(body)
     actor_comment_count = 0
     maintainer_paid = False
+    has_claim_comment = False
     tx_ids: list[str] = []
     actor_lower = actor.lower()
     for comment in comments:
@@ -204,6 +222,8 @@ def issue_from_gh(data: dict[str, Any], actor: str) -> RustChainIssue:
         comment_body = str(comment.get("body") or "")
         if author == actor:
             actor_comment_count += 1
+        if author != "Scottcjn" and is_claim_comment(comment_body):
+            has_claim_comment = True
         if author == "Scottcjn" and "paid" in comment_body.lower() and actor_lower in comment_body.lower():
             maintainer_paid = True
             tx_ids.extend(extract_tx_ids(comment_body))
@@ -221,6 +241,7 @@ def issue_from_gh(data: dict[str, Any], actor: str) -> RustChainIssue:
         maintainer_paid=maintainer_paid,
         tx_ids=tuple(sorted(set(tx_ids))),
         body_self_claim=is_self_claim_body(body),
+        has_claim_comment=has_claim_comment,
     )
 
 
@@ -270,6 +291,7 @@ def build_dashboard(repo: str = "Scottcjn/rustchain-bounties", actor: str | None
         and not issue.is_claim
         and not is_non_opportunity_title(issue.title)
         and not issue.body_self_claim
+        and not issue.has_claim_comment
         and parse_rtc_reward(issue.title)[0] is not None
         and issue.actor_comment_count == 0
     ]
