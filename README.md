@@ -23,7 +23,23 @@ look" from "already solved, crowded, or stale".
 python3 -m bounty_signal_screener.cli \
   --source https://unitaryhack.dev/bounties/ \
   --json-out artifacts/unitaryhack.json \
-  --markdown-out artifacts/unitaryhack.md
+    --markdown-out artifacts/unitaryhack.md
+```
+
+## RustChain Bounty Dashboard
+
+The RustChain dashboard mode scans live open issues in
+`Scottcjn/rustchain-bounties`, extracts posted RTC rewards, separates real
+opportunities from claim/wallet/status issues, and tracks comments by a specific
+GitHub actor so an agent can see pending versus paid RTC claims.
+
+```sh
+python3 -m bounty_signal_screener.cli \
+  --rustchain-dashboard \
+  --rustchain-actor boqiang \
+  --rustchain-limit 120 \
+  --json-out artifacts/rustchain-dashboard.json \
+  --markdown-out artifacts/rustchain-dashboard.md
 ```
 
 If the GitHub CLI is available and authenticated, the screener uses it for live

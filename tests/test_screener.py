@@ -5,6 +5,16 @@ from bounty_signal_screener.github import count_linked_pr_mentions, find_safety_
 from bounty_signal_screener.models import BountyLink, GitHubState
 from bounty_signal_screener.parser import parse_bounty_links
 from bounty_signal_screener.report import markdown_report
+from bounty_signal_screener.rustchain import (
+    RustChainDashboard,
+    RustChainIssue,
+    dashboard_markdown,
+    extract_tx_ids,
+    is_claim_title,
+    is_non_opportunity_title,
+    issue_from_gh,
+    parse_rtc_reward,
+)
 from bounty_signal_screener.screen import classify, screen_bounties
 
 
@@ -184,6 +194,96 @@ class ScreenerTest(unittest.TestCase):
         # This path intentionally exercises the serial branch without depending on gh.
         result = screen_bounties(links[:0], workers=1)
         self.assertEqual(result, [])
+
+    def test_parse_rtc_reward_handles_ranges_and_single_values(self) -> None:
+        self.assertEqual(parse_rtc_reward("[BOUNTY: 5-15 RTC] Map"), (5.0, 15.0))
+        self.assertEqual(parse_rtc_reward("[EASY BOUNTY: 3 RTC] Translation"), (3.0, 3.0))
+        self.assertEqual(parse_rtc_reward("No posted reward"), (None, None))
+
+    def test_rustchain_claim_title_detection(self) -> None:
+        self.assertTrue(is_claim_title("[CLAIM] #14015 — prop"))
+        self.assertTrue(is_claim_title("[Bounty Claim] RustChain PR #7415"))
+        self.assertFalse(is_claim_title("[BOUNTY: 8 RTC] Playtest report"))
+        self.assertTrue(is_non_opportunity_title("[WALLET] rebel117 RTC payout target"))
+        self.assertTrue(is_non_opportunity_title("Feature: Implement a dashboard"))
+
+    def test_extract_tx_ids_from_maintainer_comment(self) -> None:
+        self.assertEqual(extract_tx_ids("✅ paid (tx `eeb0994c`) and tx 91e006ce"), ("91e006ce", "eeb0994c"))
+
+    def test_issue_from_gh_tracks_actor_claim_and_paid_status(self) -> None:
+        issue = issue_from_gh(
+            {
+                "number": 14015,
+                "title": "[BOUNTY: 7 RTC] Design Map Objects / Props",
+                "url": "https://github.com/Scottcjn/rustchain-bounties/issues/14015",
+                "author": {"login": "Scottcjn"},
+                "updatedAt": "2026-06-13T07:37:51Z",
+                "body": "First clean prop pays 7 RTC.",
+                "comments": [
+                    {"author": {"login": "boqiang"}, "body": "Submitted PR #30"},
+                    {"author": {"login": "Scottcjn"}, "body": "✅ @boqiang — 7 RTC paid (tx `abc123ef`)"},
+                ],
+            },
+            actor="boqiang",
+        )
+        self.assertEqual(issue.reward_high_rtc, 7.0)
+        self.assertEqual(issue.actor_comment_count, 1)
+        self.assertTrue(issue.maintainer_paid)
+        self.assertEqual(issue.tx_ids, ("abc123ef",))
+
+    def test_issue_from_gh_does_not_count_other_people_paid_comments_for_actor(self) -> None:
+        issue = issue_from_gh(
+            {
+                "number": 13949,
+                "title": "[EASY BOUNTY: 2 RTC] Add a RustChain Badge",
+                "url": "https://github.com/Scottcjn/rustchain-bounties/issues/13949",
+                "author": {"login": "Scottcjn"},
+                "updatedAt": "2026-06-13T07:19:48Z",
+                "body": "Add the badge for 2 RTC.",
+                "comments": [
+                    {"author": {"login": "boqiang"}, "body": "My claim"},
+                    {"author": {"login": "Scottcjn"}, "body": "✅ @someoneelse — 2 RTC paid (tx `abc123ef`)"},
+                ],
+            },
+            actor="boqiang",
+        )
+        self.assertEqual(issue.actor_comment_count, 1)
+        self.assertFalse(issue.maintainer_paid)
+        self.assertEqual(issue.tx_ids, ())
+
+    def test_dashboard_markdown_summarizes_pending_actor_claims(self) -> None:
+        claim = RustChainIssue(
+            number=13949,
+            title="[EASY BOUNTY: 2 RTC] Add a RustChain Badge",
+            url="https://github.com/Scottcjn/rustchain-bounties/issues/13949",
+            author="Scottcjn",
+            updated_at="2026-06-13T07:19:48Z",
+            reward_low_rtc=2.0,
+            reward_high_rtc=2.0,
+            is_claim=False,
+            actor_comment_count=1,
+            maintainer_paid=False,
+            tx_ids=(),
+        )
+        opportunity = RustChainIssue(
+            number=14018,
+            title="[BOUNTY: 8 RTC] Playtest CHUNKINS",
+            url="https://github.com/Scottcjn/rustchain-bounties/issues/14018",
+            author="Scottcjn",
+            updated_at="2026-06-12T20:34:46Z",
+            reward_low_rtc=8.0,
+            reward_high_rtc=8.0,
+            is_claim=False,
+            actor_comment_count=0,
+            maintainer_paid=False,
+            tx_ids=(),
+        )
+        report = dashboard_markdown(
+            RustChainDashboard("Scottcjn/rustchain-bounties", "boqiang", 2, [opportunity], [claim])
+        )
+        self.assertIn("Potential pending RTC for actor: 2", report)
+        self.assertIn("[#13949]", report)
+        self.assertIn("[#14018]", report)
 
 
 if __name__ == "__main__":
