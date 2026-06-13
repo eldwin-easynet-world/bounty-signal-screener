@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,8 @@ from typing import Any
 RTC_REWARD_RE = re.compile(r"(?:(?P<low>\d+(?:\.\d+)?)\s*[–-]\s*(?P<high>\d+(?:\.\d+)?)|(?P<single>\d+(?:\.\d+)?))\s*RTC\b", re.IGNORECASE)
 CLAIM_TITLE_RE = re.compile(r"(\[CLAIM\]|\[Bounty Claim\]|\[TOOL CLAIM\]|^RTC Claim|claim:|claim\b)", re.IGNORECASE)
 NON_OPPORTUNITY_TITLE_RE = re.compile(r"(^\[WALLET\]|^Suggestion:|^Feature:)", re.IGNORECASE)
+PAID_RE = re.compile(r"\bpaid\b", re.IGNORECASE)
+RECIPIENT_RE = re.compile(r"@([A-Za-z0-9-]+)")
 
 
 @dataclass(frozen=True)
@@ -48,6 +51,39 @@ class RustChainDashboard:
             "potential_pending_rtc": sum(issue.reward_high_rtc or issue.reward_low_rtc or 0 for issue in self.actor_claims if not issue.maintainer_paid),
             "opportunities": [issue.to_jsonable() for issue in self.opportunities],
             "actor_claims": [issue.to_jsonable() for issue in self.actor_claims],
+        }
+
+
+@dataclass(frozen=True)
+class RustChainPayout:
+    issue_number: int
+    issue_title: str
+    issue_url: str
+    recipient: str
+    amount_rtc: float | None
+    tx_ids: tuple[str, ...]
+    paid_at: str
+    comment_url: str
+
+    def to_jsonable(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class RustChainPayoutSummary:
+    repo: str
+    hours: int
+    scanned_count: int
+    payouts: list[RustChainPayout]
+
+    def to_jsonable(self) -> dict[str, Any]:
+        return {
+            "repo": self.repo,
+            "hours": self.hours,
+            "scanned_count": self.scanned_count,
+            "total_rtc": sum(payout.amount_rtc or 0 for payout in self.payouts),
+            "payout_count": len(self.payouts),
+            "payouts": [payout.to_jsonable() for payout in self.payouts],
         }
 
 
@@ -93,6 +129,46 @@ def is_non_opportunity_title(title: str) -> bool:
 
 def extract_tx_ids(text: str) -> tuple[str, ...]:
     return tuple(sorted(set(re.findall(r"\btx\s*`?([0-9a-f]{6,12})`?", text, re.IGNORECASE))))
+
+
+def parse_iso_datetime(value: str) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def extract_paid_recipient(text: str) -> str:
+    match = RECIPIENT_RE.search(text)
+    return match.group(1) if match else "-"
+
+
+def payout_from_comment(issue: dict[str, Any], comment: dict[str, Any], since: datetime) -> RustChainPayout | None:
+    author = ((comment.get("author") or {}).get("login")) if isinstance(comment.get("author"), dict) else None
+    body = str(comment.get("body") or "")
+    if author != "Scottcjn" or not PAID_RE.search(body):
+        return None
+    tx_ids = extract_tx_ids(body)
+    if not tx_ids:
+        return None
+    created_at = str(comment.get("createdAt") or "")
+    paid_at = parse_iso_datetime(created_at)
+    if paid_at is None or paid_at < since:
+        return None
+    amount_low, amount_high = parse_rtc_reward(body)
+    amount = amount_high if amount_high is not None else amount_low
+    return RustChainPayout(
+        issue_number=int(issue["number"]),
+        issue_title=str(issue.get("title") or ""),
+        issue_url=str(issue.get("url") or ""),
+        recipient=extract_paid_recipient(body),
+        amount_rtc=amount,
+        tx_ids=tx_ids,
+        paid_at=created_at,
+        comment_url=str(comment.get("url") or ""),
+    )
 
 
 def issue_from_gh(data: dict[str, Any], actor: str) -> RustChainIssue:
@@ -189,6 +265,51 @@ def build_dashboard(repo: str = "Scottcjn/rustchain-bounties", actor: str | None
     return RustChainDashboard(repo=repo, actor=actor, scanned_count=len(issues), opportunities=opportunities, actor_claims=actor_claims)
 
 
+def build_payout_summary(repo: str = "Scottcjn/rustchain-bounties", limit: int = 120, hours: int = 24) -> RustChainPayoutSummary:
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    ok, data = _run_gh([
+        "issue",
+        "list",
+        "--repo",
+        repo,
+        "--state",
+        "all",
+        "--limit",
+        str(limit),
+        "--json",
+        "number",
+    ])
+    if not ok or not isinstance(data, list):
+        return RustChainPayoutSummary(repo=repo, hours=hours, scanned_count=0, payouts=[])
+
+    payouts: list[RustChainPayout] = []
+    scanned_count = 0
+    for item in data:
+        if not isinstance(item, dict) or "number" not in item:
+            continue
+        ok, issue = _run_gh([
+            "issue",
+            "view",
+            str(item["number"]),
+            "--repo",
+            repo,
+            "--json",
+            "number,title,url,comments",
+        ])
+        if not ok or not isinstance(issue, dict):
+            continue
+        scanned_count += 1
+        for comment in issue.get("comments") or []:
+            if not isinstance(comment, dict):
+                continue
+            payout = payout_from_comment(issue, comment, since)
+            if payout:
+                payouts.append(payout)
+
+    payouts.sort(key=lambda payout: payout.paid_at, reverse=True)
+    return RustChainPayoutSummary(repo=repo, hours=hours, scanned_count=scanned_count, payouts=payouts)
+
+
 def dashboard_markdown(dashboard: RustChainDashboard, top: int = 20) -> str:
     pending = sum(issue.reward_high_rtc or issue.reward_low_rtc or 0 for issue in dashboard.actor_claims if not issue.maintainer_paid)
 
@@ -227,6 +348,37 @@ def dashboard_markdown(dashboard: RustChainDashboard, top: int = 20) -> str:
     return "\n".join(lines) + "\n"
 
 
+def payout_summary_markdown(summary: RustChainPayoutSummary, top: int = 40) -> str:
+    total = sum(payout.amount_rtc or 0 for payout in summary.payouts)
+
+    def cell(text: str) -> str:
+        return text.replace("|", "\\|")
+
+    lines = [
+        "# RustChain Daily Payout Summary",
+        "",
+        f"- Repo: `{summary.repo}`",
+        f"- Window: last {summary.hours} hours",
+        f"- Issues scanned: {summary.scanned_count}",
+        f"- Paid comments found: {len(summary.payouts)}",
+        f"- Total RTC mentioned: {total:g}",
+        "",
+        "| Paid At | RTC | Recipient | Issue | Tx |",
+        "| --- | ---: | --- | --- | --- |",
+    ]
+    for payout in summary.payouts[:top]:
+        amount = payout.amount_rtc if payout.amount_rtc is not None else 0
+        tx = ", ".join(payout.tx_ids)
+        issue = f"[#{payout.issue_number}]({payout.issue_url}) {cell(payout.issue_title)}"
+        lines.append(f"| {payout.paid_at} | {amount:g} | {cell(payout.recipient)} | {issue} | {tx} |")
+    return "\n".join(lines) + "\n"
+
+
 def write_dashboard_json(dashboard: RustChainDashboard, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(dashboard.to_jsonable(), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def write_payout_summary_json(summary: RustChainPayoutSummary, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(summary.to_jsonable(), indent=2, sort_keys=True) + "\n", encoding="utf-8")

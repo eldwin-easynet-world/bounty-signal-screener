@@ -46,6 +46,20 @@ If the GitHub CLI is available and authenticated, the screener uses it for live
 issue and PR state. Without `gh`, it still parses source-page candidates but
 marks live verification as unavailable.
 
+## RustChain Daily Payout Summary
+
+The payout summary mode scans recent maintainer payment comments and builds a
+daily-style payout table with recipient, RTC amount, issue, and tx id.
+
+```sh
+python3 -m bounty_signal_screener.cli \
+  --rustchain-payout-summary \
+  --rustchain-limit 120 \
+  --rustchain-payout-hours 24 \
+  --json-out artifacts/rustchain-payout-summary.json \
+  --markdown-out artifacts/rustchain-payout-summary.md
+```
+
 ## Scores
 
 `candidate` means the issue is open and no open PR was found by the configured

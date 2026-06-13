@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .parser import parse_bounty_links, read_source
 from .report import markdown_report, write_json_report, write_markdown_report
-from .rustchain import build_dashboard, dashboard_markdown, write_dashboard_json
+from .rustchain import build_dashboard, build_payout_summary, dashboard_markdown, payout_summary_markdown, write_dashboard_json, write_payout_summary_json
 from .screen import screen_bounties
 
 
@@ -24,9 +24,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--json-out", default=None, help="Optional JSON report path")
     parser.add_argument("--markdown-out", default=None, help="Optional Markdown report path")
     parser.add_argument("--rustchain-dashboard", action="store_true", help="Build a RustChain RTC bounty dashboard from live GitHub issues")
+    parser.add_argument("--rustchain-payout-summary", action="store_true", help="Summarize RustChain paid bounty comments in the recent time window")
     parser.add_argument("--rustchain-repo", default="Scottcjn/rustchain-bounties", help="RustChain bounties repository")
     parser.add_argument("--rustchain-actor", default=None, help="GitHub actor whose claim comments should be tracked")
     parser.add_argument("--rustchain-limit", type=int, default=80, help="Open RustChain issues to scan")
+    parser.add_argument("--rustchain-payout-hours", type=int, default=24, help="Hours to include in RustChain payout summary")
     return parser
 
 
@@ -44,6 +46,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.json_out:
             write_dashboard_json(dashboard, Path(args.json_out))
         rendered = dashboard_markdown(dashboard, top=max(args.top, 0))
+        if args.markdown_out:
+            Path(args.markdown_out).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.markdown_out).write_text(rendered, encoding="utf-8")
+        print(rendered)
+        return 0
+    if args.rustchain_payout_summary:
+        summary = build_payout_summary(args.rustchain_repo, limit=args.rustchain_limit, hours=args.rustchain_payout_hours)
+        if args.json_out:
+            write_payout_summary_json(summary, Path(args.json_out))
+        rendered = payout_summary_markdown(summary, top=max(args.top, 0))
         if args.markdown_out:
             Path(args.markdown_out).parent.mkdir(parents=True, exist_ok=True)
             Path(args.markdown_out).write_text(rendered, encoding="utf-8")

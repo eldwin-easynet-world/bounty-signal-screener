@@ -1,3 +1,4 @@
+from datetime import datetime
 import unittest
 
 from bounty_signal_screener.cli import build_parser, summary_line
@@ -8,12 +9,15 @@ from bounty_signal_screener.report import markdown_report
 from bounty_signal_screener.rustchain import (
     RustChainDashboard,
     RustChainIssue,
+    RustChainPayoutSummary,
     dashboard_markdown,
     extract_tx_ids,
     is_claim_title,
     is_non_opportunity_title,
     issue_from_gh,
     parse_rtc_reward,
+    payout_from_comment,
+    payout_summary_markdown,
 )
 from bounty_signal_screener.screen import classify, screen_bounties
 
@@ -284,6 +288,48 @@ class ScreenerTest(unittest.TestCase):
         self.assertIn("Potential pending RTC for actor: 2", report)
         self.assertIn("[#13949]", report)
         self.assertIn("[#14018]", report)
+
+    def test_payout_from_comment_extracts_recent_maintainer_payment(self) -> None:
+        payout = payout_from_comment(
+            {
+                "number": 13950,
+                "title": "[EASY BOUNTY: 3 RTC] Translate the clawrtc Miner README",
+                "url": "https://github.com/Scottcjn/rustchain-bounties/issues/13950",
+            },
+            {
+                "author": {"login": "Scottcjn"},
+                "body": "✅ @eldwin-easynet-world — 3 RTC paid (tx `eeb0994c`) for Korean.",
+                "createdAt": "2026-06-13T08:00:00Z",
+                "url": "https://github.com/Scottcjn/rustchain-bounties/issues/13950#issuecomment-1",
+            },
+            datetime.fromisoformat("2026-06-13T07:00:00+00:00"),
+        )
+        self.assertIsNotNone(payout)
+        assert payout is not None
+        self.assertEqual(payout.recipient, "eldwin-easynet-world")
+        self.assertEqual(payout.amount_rtc, 3.0)
+        self.assertEqual(payout.tx_ids, ("eeb0994c",))
+
+    def test_payout_summary_markdown_reports_totals(self) -> None:
+        payout = payout_from_comment(
+            {
+                "number": 13949,
+                "title": "[EASY BOUNTY: 2 RTC] Add a RustChain Badge",
+                "url": "https://github.com/Scottcjn/rustchain-bounties/issues/13949",
+            },
+            {
+                "author": {"login": "Scottcjn"},
+                "body": "✅ @agent — 2 RTC paid (tx `abc123ef`).",
+                "createdAt": "2026-06-13T08:00:00Z",
+                "url": "https://github.com/Scottcjn/rustchain-bounties/issues/13949#issuecomment-1",
+            },
+            datetime.fromisoformat("2026-06-13T07:00:00+00:00"),
+        )
+        assert payout is not None
+        report = payout_summary_markdown(RustChainPayoutSummary("Scottcjn/rustchain-bounties", 24, 1, [payout]))
+        self.assertIn("Paid comments found: 1", report)
+        self.assertIn("Total RTC mentioned: 2", report)
+        self.assertIn("abc123ef", report)
 
 
 if __name__ == "__main__":

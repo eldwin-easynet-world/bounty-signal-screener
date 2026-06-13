@@ -1,0 +1,33 @@
+{
+  "hours": 24,
+  "payout_count": 2,
+  "payouts": [
+    {
+      "amount_rtc": 20.0,
+      "comment_url": "https://github.com/Scottcjn/rustchain-bounties/issues/14019#issuecomment-4695424106",
+      "issue_number": 14019,
+      "issue_title": "[BOUNTY: 20 RTC] Design a CHUNKINS level (Lua) for the Feverdream Engine",
+      "issue_url": "https://github.com/Scottcjn/rustchain-bounties/issues/14019",
+      "paid_at": "2026-06-12T21:00:04Z",
+      "recipient": "-",
+      "tx_ids": [
+        "1beabccf99e7"
+      ]
+    },
+    {
+      "amount_rtc": 20.0,
+      "comment_url": "https://github.com/Scottcjn/rustchain-bounties/issues/14019#issuecomment-4694672372",
+      "issue_number": 14019,
+      "issue_title": "[BOUNTY: 20 RTC] Design a CHUNKINS level (Lua) for the Feverdream Engine",
+      "issue_url": "https://github.com/Scottcjn/rustchain-bounties/issues/14019",
+      "paid_at": "2026-06-12T19:42:03Z",
+      "recipient": "Scottcjn",
+      "tx_ids": [
+        "a3efb3ea"
+      ]
+    }
+  ],
+  "repo": "Scottcjn/rustchain-bounties",
+  "scanned_count": 149,
+  "total_rtc": 40.0
+}
