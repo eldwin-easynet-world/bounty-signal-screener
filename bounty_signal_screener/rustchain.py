@@ -275,7 +275,7 @@ def build_dashboard(repo: str = "Scottcjn/rustchain-bounties", actor: str | None
     ]
     actor_claims = [
         issue for issue in issues
-        if issue.actor_comment_count > 0 and issue.reward_high_rtc is not None
+        if issue.actor_comment_count > 0
     ]
     opportunities.sort(key=lambda issue: (-(issue.reward_high_rtc or 0), issue.number))
     actor_claims.sort(key=lambda issue: (issue.maintainer_paid, -int(issue.updated_at[:4] or "0"), issue.number))
@@ -348,9 +348,10 @@ def dashboard_markdown(dashboard: RustChainDashboard, top: int = 20) -> str:
     ]
     for issue in dashboard.actor_claims[:top]:
         status = "paid" if issue.maintainer_paid else "pending"
-        reward = issue.reward_high_rtc or issue.reward_low_rtc or 0
+        reward_value = issue.reward_high_rtc or issue.reward_low_rtc
+        reward = f"{reward_value:g}" if reward_value is not None else "-"
         tx = ", ".join(issue.tx_ids) if issue.tx_ids else "-"
-        lines.append(f"| {status} | {reward:g} | [#{issue.number}]({issue.url}) | {cell(issue.title)} | {tx} |")
+        lines.append(f"| {status} | {reward} | [#{issue.number}]({issue.url}) | {cell(issue.title)} | {tx} |")
 
     lines.extend([
         "",

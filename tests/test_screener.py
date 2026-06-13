@@ -312,6 +312,28 @@ class ScreenerTest(unittest.TestCase):
         self.assertIn("[#13949]", report)
         self.assertIn("[#14018]", report)
 
+    def test_dashboard_markdown_keeps_unknown_value_actor_claims(self) -> None:
+        claim = RustChainIssue(
+            number=14042,
+            title="Bug: Documentation link in README is broken",
+            url="https://github.com/Scottcjn/rustchain-bounties/issues/14042",
+            author="Scottcjn",
+            updated_at="2026-06-13T11:43:22Z",
+            reward_low_rtc=None,
+            reward_high_rtc=None,
+            is_claim=False,
+            actor_comment_count=1,
+            maintainer_paid=False,
+            tx_ids=(),
+        )
+
+        report = dashboard_markdown(
+            RustChainDashboard("Scottcjn/rustchain-bounties", "eldwin-easynet-world", 1, [], [claim])
+        )
+
+        self.assertIn("Potential pending RTC for actor: 0", report)
+        self.assertIn("| pending | - | [#14042]", report)
+
     def test_payout_from_comment_extracts_recent_maintainer_payment(self) -> None:
         payout = payout_from_comment(
             {
