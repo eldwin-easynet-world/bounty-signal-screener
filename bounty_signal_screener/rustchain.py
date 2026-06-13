@@ -13,6 +13,16 @@ from typing import Any
 RTC_REWARD_RE = re.compile(r"(?:(?P<low>\d+(?:\.\d+)?)\s*[–-]\s*(?P<high>\d+(?:\.\d+)?)|(?P<single>\d+(?:\.\d+)?))\s*RTC\b", re.IGNORECASE)
 CLAIM_TITLE_RE = re.compile(r"(\[CLAIM\]|\[Bounty Claim\]|\[TOOL CLAIM\]|^RTC Claim|claim:|claim\b)", re.IGNORECASE)
 NON_OPPORTUNITY_TITLE_RE = re.compile(r"(^\[WALLET\]|^Suggestion:|^Feature:)", re.IGNORECASE)
+SELF_CLAIM_BODY_RE = re.compile(
+    r"\b("
+    r"I have (?:developed|created|implemented|built|open-sourced)|"
+    r"I am requesting (?:a )?reward|"
+    r"Claiming onboarding bounty|"
+    r"RTC Wallet:|"
+    r"Wallet:"
+    r")\b",
+    re.IGNORECASE,
+)
 PAID_RE = re.compile(r"\bpaid\b", re.IGNORECASE)
 RECIPIENT_RE = re.compile(r"@([A-Za-z0-9-]+)")
 
@@ -30,6 +40,7 @@ class RustChainIssue:
     actor_comment_count: int
     maintainer_paid: bool
     tx_ids: tuple[str, ...]
+    body_self_claim: bool = False
 
     def to_jsonable(self) -> dict[str, Any]:
         return asdict(self)
@@ -127,6 +138,10 @@ def is_non_opportunity_title(title: str) -> bool:
     return bool(NON_OPPORTUNITY_TITLE_RE.search(title))
 
 
+def is_self_claim_body(body: str) -> bool:
+    return bool(SELF_CLAIM_BODY_RE.search(body))
+
+
 def extract_tx_ids(text: str) -> tuple[str, ...]:
     return tuple(sorted(set(re.findall(r"\btx\s*`?([0-9a-f]{6,12})`?", text, re.IGNORECASE))))
 
@@ -205,6 +220,7 @@ def issue_from_gh(data: dict[str, Any], actor: str) -> RustChainIssue:
         actor_comment_count=actor_comment_count,
         maintainer_paid=maintainer_paid,
         tx_ids=tuple(sorted(set(tx_ids))),
+        body_self_claim=is_self_claim_body(body),
     )
 
 
@@ -253,6 +269,7 @@ def build_dashboard(repo: str = "Scottcjn/rustchain-bounties", actor: str | None
         if issue.reward_high_rtc is not None
         and not issue.is_claim
         and not is_non_opportunity_title(issue.title)
+        and not issue.body_self_claim
         and parse_rtc_reward(issue.title)[0] is not None
         and issue.actor_comment_count == 0
     ]

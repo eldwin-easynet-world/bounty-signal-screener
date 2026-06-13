@@ -14,6 +14,7 @@ from bounty_signal_screener.rustchain import (
     extract_tx_ids,
     is_claim_title,
     is_non_opportunity_title,
+    is_self_claim_body,
     issue_from_gh,
     parse_rtc_reward,
     payout_from_comment,
@@ -210,6 +211,28 @@ class ScreenerTest(unittest.TestCase):
         self.assertFalse(is_claim_title("[BOUNTY: 8 RTC] Playtest report"))
         self.assertTrue(is_non_opportunity_title("[WALLET] rebel117 RTC payout target"))
         self.assertTrue(is_non_opportunity_title("Feature: Implement a dashboard"))
+
+    def test_rustchain_body_self_claim_detection(self) -> None:
+        self.assertTrue(is_self_claim_body("I have developed a utility to automate verification.\n\nRTC Wallet: RTCabc"))
+        self.assertTrue(is_self_claim_body("Claiming onboarding bounty #2781.\nWallet: abc"))
+        self.assertFalse(is_self_claim_body("Build a utility that verifies PoC scripts and reports exit codes."))
+
+    def test_issue_from_gh_marks_body_self_claims(self) -> None:
+        issue = issue_from_gh(
+            {
+                "number": 13825,
+                "title": "[TOOL: 30-50 RTC] Automated Bounty Verification Tool",
+                "url": "https://github.com/Scottcjn/rustchain-bounties/issues/13825",
+                "author": {"login": "nkar123412-hub"},
+                "updatedAt": "2026-06-11T10:16:42Z",
+                "body": "I have developed a utility to automate verification.\n\nRTC Wallet: RTCabc",
+                "comments": [],
+            },
+            actor="eldwin-easynet-world",
+        )
+        self.assertTrue(issue.body_self_claim)
+        self.assertFalse(issue.is_claim)
+        self.assertEqual(issue.reward_high_rtc, 50.0)
 
     def test_extract_tx_ids_from_maintainer_comment(self) -> None:
         self.assertEqual(extract_tx_ids("✅ paid (tx `eeb0994c`) and tx 91e006ce"), ("91e006ce", "eeb0994c"))
